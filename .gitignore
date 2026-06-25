@@ -1,0 +1,15 @@
+# Build artifacts
+/terraform-provider-omni
+*.exe
+dist/
+
+# Local terraform state and plugin caches
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Editor
+.vscode/
+.idea/
