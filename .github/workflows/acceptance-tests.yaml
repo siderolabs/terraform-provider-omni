@@ -1,0 +1,40 @@
+name: acceptance-tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      omni_version:
+        description: Omni image tag to test against
+        required: false
+        default: latest
+
+env:
+  OMNI_VERSION: ${{ github.event.inputs.omni_version || 'latest' }}
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Run acceptance tests
+        run: ./hack/test/run.sh
+
+      - name: Upload Omni logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omni-logs
+          path: /tmp/omni-tf-acc.log
+          if-no-files-found: ignore

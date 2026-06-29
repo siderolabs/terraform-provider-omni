@@ -1,0 +1,28 @@
+name: check-dirty
+on:
+  pull_request:
+jobs:
+  check-dirty:
+    if: (!startsWith(github.head_ref, 'renovate/') && !startsWith(github.head_ref, 'dependabot/'))
+    runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Go vulnerability check
+        run: make go-vulncheck
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: dirty-check
+        run: |
+          make check-dirty
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8

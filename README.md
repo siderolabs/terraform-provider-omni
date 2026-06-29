@@ -38,35 +38,6 @@ provider "omni" {
 
 Create a service account key with `omnictl serviceaccount create`.
 
-## Resources
-
-### `omni_user`
-
-Manages an Omni user and its associated identity.
-
-```hcl
-resource "omni_user" "alice" {
-  email = "alice@example.com"
-  role  = "Operator"
-}
-```
-
-- `email` (required, forces replacement) — the user identity, keyed by email.
-- `role` (required) — one of `None`, `Reader`, `Operator`, `Admin`, `InfraProvider`.
-- `id` (computed) — the generated user UUID.
-
-Import an existing user by email:
-
-```sh
-terraform import omni_user.alice alice@example.com
-```
-
-## Data sources
-
-### `omni_user`
-
-Looks up an existing Omni user by email, exposing its `id` and `role`.
-
 ## Development
 
 ```sh
@@ -82,21 +53,23 @@ The repo expects the Omni client module to be available; for local development a
 
 ### Acceptance tests
 
-`make test-integration` (i.e. `hack/test/run.sh`) brings up a throwaway Omni instance and a mock
-OIDC server via `hack/test/docker-compose.yaml`, extracts the bootstrapped service-account key,
-and runs the `TestAcc*` tests against it (`TF_ACC=1`). Omni uses a checked-in throwaway PGP key
-(`file://` private-key-source, no Vault) and self-signed certs under `hack/test/certs/`; the tests
-connect with `insecure_skip_tls_verify = true`. No real Auth0 tenant is required — the
-service-account key is PGP-signed, so the OIDC backend is never contacted.
+`make test-integration` (i.e. `hack/test/run.sh`) brings up a throwaway Omni instance via
+`hack/test/docker-compose.yaml`, extracts the bootstrapped service-account key, and runs the
+`TestAcc*` tests against it (`TF_ACC=1`). Omni is configured with its
+[native OIDC provider](https://docs.siderolabs.com/omni/reference/omni-configuration#auth-oidc)
+pointed at a mock OIDC server, so no external identity provider is required. It uses a checked-in
+throwaway PGP key (`file://` private-key-source, no Vault) and self-signed certs under
+`hack/test/certs/`; the tests connect with `insecure_skip_tls_verify = true` and authenticate with
+the service-account key (PGP-signed), so no interactive OIDC login happens.
 
-If port `8099` is already in use locally, override it:
+If port `8099` is already in use locally, override it; the Omni image tag is also configurable:
 
 ```sh
 OMNI_HOST_PORT=18099 make test-integration
+OMNI_VERSION=v1.9.0 OMNI_HOST_PORT=18099 make test-integration
 ```
 
-The acceptance tests also run in CI via `.github/workflows/acceptance-tests.yaml`, which checks out
-`siderolabs/omni` as a sibling directory so the `../omni/client` replace resolves.
+The acceptance tests also run
 
 ## License
 
