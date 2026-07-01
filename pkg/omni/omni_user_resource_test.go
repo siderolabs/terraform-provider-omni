@@ -17,14 +17,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	omniclient "github.com/siderolabs/omni/client/pkg/client"
 	"github.com/siderolabs/omni/client/pkg/omni/resources/auth"
+
+	"github.com/siderolabs/terraform-provider-omni/pkg/omni"
 )
 
 func TestAccOmniUserResource(t *testing.T) {
 	email := fmt.Sprintf("%s@example.com", acctest.RandomWithPrefix("tf-acc"))
 
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+	resource.ParallelTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: omni.TestAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckUserDestroy,
 		Steps: []resource.TestStep{
 			{ // create

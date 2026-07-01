@@ -1,0 +1,44 @@
+provider "omni" {
+  insecure_skip_tls_verify = true
+}
+
+resource "omni_cluster" "test" {
+  name               = "{{ .Name }}"
+  kubernetes_version = "{{ .KubernetesVersion }}"
+  talos_version      = "{{ .TalosVersion }}"
+}
+
+resource "omni_config_patch" "kubespan" {
+  name    = "kubespan"
+  weight  = 200
+  cluster = omni_cluster.test.name
+  data = yamlencode({
+    apiVersion  = "v1alpha1"
+    kind        = "KubeSpanConfig"
+    enabled     = true
+  })
+}
+
+resource "omni_machine_set" "cp" {
+  cluster = omni_cluster.test.name
+  role    = "controlplane"
+}
+
+resource "omni_machine_set" "workers" {
+  cluster = omni_cluster.test.name
+  role    = "workers"
+}
+{{ range $i, $id := .ControlPlanes }}
+resource "omni_machine_set_node" "cp{{ $i }}" {
+  machine_id  = "{{ $id }}"
+  machine_set = omni_machine_set.cp.name
+  cluster     = omni_cluster.test.name
+}
+{{ end }}
+{{- range $i, $id := .Workers }}
+resource "omni_machine_set_node" "worker{{ $i }}" {
+  machine_id  = "{{ $id }}"
+  machine_set = omni_machine_set.workers.name
+  cluster     = omni_cluster.test.name
+}
+{{ end }}

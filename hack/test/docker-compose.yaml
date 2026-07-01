@@ -10,58 +10,50 @@
 # private-key-source, so no Vault is needed either.
 
 services:
-  oidc:
-    # Serves OIDC discovery + JWKS for any issuer path, e.g. http://oidc:8080/omni.
-    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
-    environment:
-      LOG_LEVEL: WARN
-    expose:
-      - "8080"
+  dex:
+    image: dexidp/dex:v2.41.1
+    container_name: dex
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dex.yaml:/etc/dex/config.yaml
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/dex/.well-known/openid-configuration"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - omni-test
 
   omni:
     image: ghcr.io/siderolabs/omni:${OMNI_VERSION:-latest}
-    # Restart until the mock OIDC server is ready: Omni does OIDC discovery at boot and depends_on
-    # only orders startup, it does not wait for readiness.
     restart: on-failure
-    depends_on:
-      - oidc
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun
     volumes:
       - ./certs:/certs:ro
+      # Rendered from omni-config.yaml.tmpl by run.sh / run-qemu.sh (see that file for details).
+      - ./omni-config.yaml:/etc/omni/config.yaml:ro
       - omni-out:/_out
     ports:
       - "${OMNI_HOST_PORT:-8099}:8099"
-    environment:
-      SIDEROLINK_DEV_JOIN_TOKEN: testonly
+      - "8090:8090"
+      - "50180:50180/udp"
     command:
-      - --account-id=ac000000-0000-0000-0000-000000000000
-      - --name=omni-test
-      - --bind-addr=0.0.0.0:8099
-      - --advertised-api-url=https://127.0.0.1:8099/
-      - --machine-api-bind-addr=0.0.0.0:8090
-      - --siderolink-api-advertised-url=grpc://127.0.0.1:8090
-      - --siderolink-wireguard-bind-addr=0.0.0.0:50180
-      - --siderolink-wireguard-advertised-addr=127.0.0.1:50180
-      - --event-sink-port=8091
-      - --key=/certs/localhost-key.pem
-      - --cert=/certs/localhost.pem
-      - --private-key-source=file:///certs/key.private
-      - --public-key-files=/certs/key.public
-      - --auth-oidc-enabled=true
-      - --auth-oidc-provider-url=http://oidc:8080/omni
-      - --auth-oidc-client-id=omni
-      - --auth-oidc-client-secret=test-client-secret
-      - --auth-oidc-allow-unverified-email=true
-      - --initial-users=test-user@siderolabs.com
-      - --create-initial-service-account
-      - --initial-service-account-key-path=/_out/key
-      - --etcd-embedded-unsafe-fsync=true
-      - --sqlite-storage-path=/_out/secondary.db
-      - --eula-accept-email=test-user@siderolabs.com
-      - --eula-accept-name=Test User
+      - --config-path=/etc/omni/config.yaml
+    networks:
+      - omni-test
+    depends_on:
+      dex:
+        condition: service_healthy
 
 volumes:
   omni-out:
+
+networks:
+  omni-test:
+    driver: bridge

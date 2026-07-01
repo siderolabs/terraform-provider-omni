@@ -1,0 +1,56 @@
+# Omni server configuration for the integration test harness (envsubst template).
+#
+# run.sh / run-qemu.sh render this into hack/test/omni-config.yaml via `envsubst`, substituting
+# ${OMNI_SIDEROLINK_ADVERTISED_HOST} (127.0.0.1 for the machine-less suite, the host LAN/bridge IP
+# under QEMU). The rendered file is mounted into the Omni container and loaded with --config-path.
+account:
+  id: ac000000-0000-0000-0000-000000000000
+  name: omni-test
+
+services:
+  api:
+    endpoint: 0.0.0.0:8099
+    advertisedURL: https://127.0.0.1:8099/
+    certFile: /certs/localhost.pem
+    keyFile: /certs/localhost-key.pem
+  machineAPI:
+    endpoint: 0.0.0.0:8090
+    advertisedURL: grpc://${OMNI_SIDEROLINK_ADVERTISED_HOST}:8090
+  siderolink:
+    eventSinkPort: 8091
+    wireGuard:
+      endpoint: 0.0.0.0:50180
+      advertisedEndpoint: ${OMNI_SIDEROLINK_ADVERTISED_HOST}:50180
+
+auth:
+  initialUsers:
+    - test-user@siderolabs.com
+  oidc:
+    enabled: true
+    providerURL: http://dex:8080/dex
+    clientID: omni
+    clientSecret: ZXhhbXBsZR1hcHAtc2VjcmV0
+    scopes:
+      - openid
+      - profile
+      - email
+    allowUnverifiedEmail: true
+  initialServiceAccount:
+    enabled: true
+    keyPath: /_out/key
+
+storage:
+  default:
+    kind: etcd
+    etcd:
+      embedded: true
+      embeddedUnsafeFsync: true
+      privateKeySource: file:///certs/key.private
+      publicKeyFiles:
+        - /certs/key.public
+  sqlite:
+    path: /_out/secondary.db
+
+eulaAccept:
+  name: Test User
+  email: test-user@siderolabs.com

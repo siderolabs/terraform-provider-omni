@@ -9,7 +9,8 @@ name: slack-notify
       - completed
 jobs:
   slack-notify:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: generic
     if: github.event.workflow_run.conclusion != 'skipped'
     steps:
       - name: Get PR number

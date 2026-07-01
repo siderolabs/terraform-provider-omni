@@ -1,0 +1,49 @@
+name: acceptance-tests-qemu
+
+# End-to-end test that provisions real QEMU machines, joins them to a throwaway Omni over SideroLink,
+# and exercises a cluster through bootstrap and scale up/down (see hack/test/run-qemu.sh and the
+# `qemu`-tagged test in internal/integration).
+#
+# This is heavy (boots several Talos VMs), so it runs nightly, on pull requests, and on demand. It
+# requires a runner with nested virtualization (KVM); the default GitHub-hosted runner is small, so
+# override the runner via the `QEMU_RUNNER` repository variable to target a host with more RAM/disk
+# (≈16GB RAM and ≈80GB disk for four VMs).
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      omni_version:
+        description: Omni image tag to test against
+        required: false
+        default: latest
+
+env:
+  OMNI_VERSION: ${{ github.event.inputs.omni_version || 'latest' }}
+
+jobs:
+  acceptance-qemu:
+    runs-on:
+      group: large
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Run QEMU end-to-end test
+        run: sudo -E ./hack/test/run-qemu.sh
+
+      - name: Upload Omni logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omni-qemu-logs
+          path: /tmp/omni-tf-acc-qemu.log
+          if-no-files-found: ignore

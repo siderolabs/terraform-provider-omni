@@ -127,7 +127,7 @@ func (p *OmniProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	data := &providerData{
 		client: client,
-		state:  client.Omni().State(),
+		state:  newManagedState(client.Omni().State()),
 	}
 
 	resp.ResourceData = data
@@ -138,6 +138,13 @@ func (p *OmniProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 func (p *OmniProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewUserResource,
+		NewClusterResource,
+		NewMachineSetResource,
+		NewMachineSetNodeResource,
+		NewConfigPatchResource,
+		NewMachineExtensionsResource,
+		NewKubernetesManifestResource,
+		NewKubernetesHealthCheckResource,
 	}
 }
 

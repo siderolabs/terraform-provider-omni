@@ -1,0 +1,18 @@
+# config.yaml
+issuer: http://dex:8080/dex
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:8080
+staticClients:
+  - id: omni
+    redirectURIs:
+      - 'https://127.0.0.1:8099/oidc/consume'
+    name: 'Omni'
+    secret: ZXhhbXBsZR1hcHAtc2VjcmV0
+enablePasswordDB: true
+staticPasswords:
+  - email: test-user@siderolabs.com
+    hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+    username: "test-user"
+    userID: "1234"

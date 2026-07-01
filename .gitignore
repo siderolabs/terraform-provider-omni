@@ -10,6 +10,9 @@ dist/
 *.tfstate.*
 crash.log
 
+# Rendered from hack/test/omni-config.yaml.tmpl by the test harness.
+/hack/test/omni-config.yaml
+
 # Editor
 .vscode/
 .idea/
