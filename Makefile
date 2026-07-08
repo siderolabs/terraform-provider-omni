@@ -31,6 +31,12 @@ test-integration:
 vet:
 	go vet ./...
 
+$(ARTIFACTS):
+	mkdir -p $(ARTIFACTS)
+
+release-notes: $(ARTIFACTS)
+	@ARTIFACTS=$(ARTIFACTS) ./hack/release.sh $@ $(ARTIFACTS)/RELEASE_NOTES.md $(TAG)
+
 .PHONY: lint
 lint:
 	golangci-lint run

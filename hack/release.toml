@@ -1,0 +1,6 @@
+# commit to be tagged for the new release
+commit = "HEAD"
+
+project_name = "Omni Terraform Provider"
+github_repo = "siderolabs/terraform-provider-omni"
+ignore_deps = ["google.golang.org/grpc"]
