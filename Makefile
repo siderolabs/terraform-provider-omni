@@ -5,6 +5,7 @@
 NAME := terraform-provider-omni
 VERSION ?= dev
 ARTIFACTS ?= _out
+TAG ?= $(shell git describe --tag --always --dirty)
 
 .PHONY: build
 build:
