@@ -27,6 +27,15 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_ROOT}"
 
+# Point the provider tests at an existing Terraform CLI. Without one, terraform-plugin-testing
+# installs its own copy into a fresh temp dir for every test, and with the tests running in parallel
+# a fork can inherit a write handle to a binary another test is still extracting, so the exec fails
+# with "text file busy". Reusing one binary writes nothing, so the race cannot happen.
+if [[ -z "${TF_ACC_TERRAFORM_PATH:-}" ]] && command -v terraform >/dev/null 2>&1; then
+  TF_ACC_TERRAFORM_PATH="$(command -v terraform)"
+  export TF_ACC_TERRAFORM_PATH
+fi
+
 if [[ "${CI:-false}" == "true" ]] && ! docker compose version >/dev/null 2>&1; then
   COMPOSE_VERSION=v2.32.4
   install -d /usr/local/lib/docker/cli-plugins
