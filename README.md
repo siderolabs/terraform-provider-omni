@@ -27,7 +27,8 @@ Early, but no longer a skeleton. Supported resources:
 | `omni_installation_media_preset` | Saved installation media presets (`omnictl media preset`) |
 | `omni_service_account` | Service accounts and their keys (`omnictl serviceaccount`) |
 
-Plus the `omni_user` and `omni_service_account` data sources. See [`docs/`](docs/) for the
+Plus the `omni_user`, `omni_service_account` and `omni_installation_media` data sources
+(`omni_installation_media` resolves a preset into a downloadable URL). See [`docs/`](docs/) for the
 generated reference.
 
 ## Provider configuration

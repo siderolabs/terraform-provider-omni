@@ -37,8 +37,16 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          # The wrapper replaces the binary with a shell script, which the provider test framework
+          # cannot exec as a Terraform CLI.
+          terraform_wrapper: false
+
       - name: Run QEMU end-to-end test
-        run: sudo -E ./hack/test/run-qemu.sh
+        # See the note in acceptance-tests.yaml: sudo resets PATH, so the path is resolved here.
+        run: sudo -E env TF_ACC_TERRAFORM_PATH="$(command -v terraform)" ./hack/test/run-qemu.sh
 
       - name: Upload Omni logs on failure
         if: failure()
