@@ -159,5 +159,6 @@ func (p *OmniProvider) DataSources(_ context.Context) []func() datasource.DataSo
 	return []func() datasource.DataSource{
 		NewUserDataSource,
 		NewServiceAccountDataSource,
+		NewInstallationMediaDataSource,
 	}
 }

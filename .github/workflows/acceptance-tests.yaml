@@ -29,8 +29,17 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          # The wrapper replaces the binary with a shell script, which the provider test framework
+          # cannot exec as a Terraform CLI.
+          terraform_wrapper: false
+
       - name: Run acceptance tests
-        run: sudo -E ./hack/test/run.sh
+        # TF_ACC_TERRAFORM_PATH is resolved out here rather than inside the script: sudo resets PATH
+        # via secure_path, so the Terraform installed above is not on it as root.
+        run: sudo -E env TF_ACC_TERRAFORM_PATH="$(command -v terraform)" ./hack/test/run.sh
 
       - name: Upload Omni logs on failure
         if: failure()

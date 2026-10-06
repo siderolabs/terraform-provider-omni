@@ -300,7 +300,7 @@ func (r *installationMediaPresetResource) Create(ctx context.Context, req resour
 		return
 	}
 
-	imageFactoryURL, err := r.resolveImageFactoryURL(ctx, normalizeTalosVersion(plan.TalosVersion.ValueString()))
+	imageFactoryURL, err := resolveImageFactoryURL(ctx, r.data.state, normalizeTalosVersion(plan.TalosVersion.ValueString()))
 	if err != nil {
 		errToDiag(&resp.Diagnostics, "Failed to resolve the Omni image factory", err)
 
@@ -369,7 +369,7 @@ func (r *installationMediaPresetResource) Update(ctx context.Context, req resour
 		return
 	}
 
-	imageFactoryURL, err := r.resolveImageFactoryURL(ctx, normalizeTalosVersion(plan.TalosVersion.ValueString()))
+	imageFactoryURL, err := resolveImageFactoryURL(ctx, r.data.state, normalizeTalosVersion(plan.TalosVersion.ValueString()))
 	if err != nil {
 		errToDiag(&resp.Diagnostics, "Failed to resolve the Omni image factory", err)
 
@@ -427,35 +427,6 @@ func (r *installationMediaPresetResource) Delete(ctx context.Context, req resour
 // ImportState implements resource.ResourceWithImportState. Presets are imported by their name.
 func (r *installationMediaPresetResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
-}
-
-// resolveImageFactoryURL returns the image factory the preset should be pinned to.
-//
-// It mirrors what Omni itself does when picking a factory for a Talos version: a version served by
-// a specific factory pins that factory. Anything else (an unset version, a version Omni does not
-// know, or one with no factory recorded) falls back to the instance's primary factory. The URL is
-// normalized the same way Omni normalizes it, so the server-side check that it is one of the
-// configured factories compares equal.
-func (r *installationMediaPresetResource) resolveImageFactoryURL(ctx context.Context, talosVersion string) (string, error) {
-	if talosVersion != "" {
-		version, err := safe.ReaderGetByID[*omni.TalosVersion](ctx, r.data.state, talosVersion)
-		if err != nil && !cosistate.IsNotFoundError(err) {
-			return "", fmt.Errorf("failed to look up Talos version %q: %w", talosVersion, err)
-		}
-
-		if version != nil {
-			if url := version.TypedSpec().Value.GetImageFactoryUrl(); url != "" {
-				return normalizeImageFactoryURL(url), nil
-			}
-		}
-	}
-
-	featuresConfig, err := safe.ReaderGetByID[*omni.FeaturesConfig](ctx, r.data.state, omni.FeaturesConfigID)
-	if err != nil {
-		return "", fmt.Errorf("failed to look up the Omni features config: %w", err)
-	}
-
-	return normalizeImageFactoryURL(featuresConfig.TypedSpec().Value.GetImageFactoryBaseUrl()), nil
 }
 
 // applyInstallationMediaPresetModel builds an InstallationMediaConfig spec from the model,
