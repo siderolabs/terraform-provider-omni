@@ -26,10 +26,12 @@ Early, but no longer a skeleton. Supported resources:
 | `omni_etcd_backup_s3_config` | Instance-wide S3 storage for etcd backups |
 | `omni_installation_media_preset` | Saved installation media presets (`omnictl media preset`) |
 | `omni_service_account` | Service accounts and their keys (`omnictl serviceaccount`) |
+| `omni_join_token` | Join tokens machines present to register (`omnictl jointoken`) |
+| `omni_default_join_token` | Which join token the instance treats as the default |
 
-Plus the `omni_user`, `omni_service_account` and `omni_installation_media` data sources
-(`omni_installation_media` resolves a preset into a downloadable URL). See [`docs/`](docs/) for the
-generated reference.
+Plus the `omni_user`, `omni_service_account`, `omni_installation_media` and
+`omni_machine_join_config` data sources (`omni_installation_media` resolves a preset into a
+downloadable URL). See [`docs/`](docs/) for the generated reference.
 
 ## Provider configuration
 

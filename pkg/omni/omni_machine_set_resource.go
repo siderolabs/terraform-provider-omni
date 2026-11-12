@@ -27,13 +27,26 @@ import (
 const (
 	machineSetRoleControlPlane = "controlplane"
 	machineSetRoleWorker       = "workers"
-
-	machineSetAllocationStatic    = "Static"
-	machineSetAllocationUnlimited = "Unlimited"
 )
 
-// machineSetStrategyNames maps the accepted strategy type strings.
-var machineSetStrategyNames = []string{"Unset", "Rolling"}
+// machineSetAllocationNames are the allocation types accepted by the `allocation_type` attribute,
+// and machineSetAllocationStatic is the one Omni falls back to.
+//
+// Like machineSetStrategyNames, they come from the generated enum rather than a hand-written list:
+// machineSetSpecFromPlan looks each one back up in MachineSetSpec_MachineAllocation_Type_value,
+// where a missing key yields 0, so a list that drifted from the enum would not fail, it would
+// silently mean Static.
+var (
+	machineSetAllocationNames  = enumNames(specs.MachineSetSpec_MachineAllocation_Type_name)
+	machineSetAllocationStatic = enumName(specs.MachineSetSpec_MachineAllocation_Type_name, int32(specs.MachineSetSpec_MachineAllocation_Static))
+)
+
+// machineSetStrategyNames are the strategy types accepted by the `type` attribute.
+//
+// They come from the generated enum rather than a hand-written list because strategyToSpec looks
+// each one back up in MachineSetSpec_UpdateStrategy_value, where a missing key yields 0: a list that
+// drifted from the enum would not fail, it would silently mean Unset.
+var machineSetStrategyNames = enumNames(specs.MachineSetSpec_UpdateStrategy_name)
 
 // Ensure the resource satisfies the framework interfaces.
 var (
@@ -98,7 +111,7 @@ func (r *machineSetResource) Schema(_ context.Context, _ frameworkresource.Schem
 			Attributes: map[string]schema.Attribute{
 				"type": schema.StringAttribute{
 					Required:    true,
-					Description: "Strategy type. One of: Unset, Rolling.",
+					Description: "Strategy type. " + describeOneOf(machineSetStrategyNames),
 					Validators: []validator.String{
 						stringvalidator.OneOf(machineSetStrategyNames...),
 					},
@@ -167,11 +180,12 @@ func (r *machineSetResource) Schema(_ context.Context, _ frameworkresource.Schem
 						Description: "Number of machines to allocate. Required for Static allocation, ignored for Unlimited.",
 					},
 					"allocation_type": schema.StringAttribute{
-						Optional:    true,
-						Computed:    true,
-						Description: "Allocation type. One of: Static, Unlimited. Defaults to Static.",
+						Optional: true,
+						Computed: true,
+						Description: "Allocation type. " + describeOneOf(machineSetAllocationNames) +
+							" Defaults to `" + machineSetAllocationStatic + "`.",
 						Validators: []validator.String{
-							stringvalidator.OneOf(machineSetAllocationStatic, machineSetAllocationUnlimited),
+							stringvalidator.OneOf(machineSetAllocationNames...),
 						},
 					},
 				},
@@ -280,10 +294,10 @@ func (r *machineSetResource) applyMachineSetModel(plan machineSetResourceModel, 
 	value.MachineAllocation = nil
 
 	if plan.MachineClass != nil {
-		allocationType := specs.MachineSetSpec_MachineAllocation_Static
-		if plan.MachineClass.AllocationType.ValueString() == machineSetAllocationUnlimited {
-			allocationType = specs.MachineSetSpec_MachineAllocation_Unlimited
-		}
+		// An unset attribute is not in the value map, which yields 0: Static, the documented default.
+		allocationType := specs.MachineSetSpec_MachineAllocation_Type(
+			specs.MachineSetSpec_MachineAllocation_Type_value[plan.MachineClass.AllocationType.ValueString()],
+		)
 
 		value.MachineAllocation = &specs.MachineSetSpec_MachineAllocation{
 			Name:           plan.MachineClass.Name.ValueString(),
@@ -488,10 +502,7 @@ func (r *machineSetResource) machineSetToModel(machineSet *omni.MachineSet, mode
 	model.UpgradeStrategy = strategyFromSpec(value.GetUpgradeStrategy(), value.GetUpgradeStrategyConfig(), model.UpgradeStrategy)
 
 	if allocation := value.GetMachineAllocation(); allocation != nil {
-		allocationType := machineSetAllocationStatic
-		if allocation.GetAllocationType() == specs.MachineSetSpec_MachineAllocation_Unlimited {
-			allocationType = machineSetAllocationUnlimited
-		}
+		allocationType := enumName(specs.MachineSetSpec_MachineAllocation_Type_name, int32(allocation.GetAllocationType()))
 
 		size := types.Int64Null()
 		if model.MachineClass != nil && !model.MachineClass.Size.IsNull() {
@@ -555,7 +566,7 @@ func strategyFromSpec(
 	}
 
 	return &machineSetStrategyModel{
-		Type:           types.StringValue(specs.MachineSetSpec_UpdateStrategy_name[int32(strategy)]),
+		Type:           types.StringValue(enumName(specs.MachineSetSpec_UpdateStrategy_name, int32(strategy))),
 		MaxParallelism: maxParallelism,
 	}
 }

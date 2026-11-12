@@ -94,7 +94,7 @@ Required:
 
 Required:
 
-- `type` (String) Strategy type. One of: Unset, Rolling.
+- `type` (String) Strategy type. One of: `Unset`, `Rolling`.
 
 Optional:
 
@@ -110,7 +110,7 @@ Required:
 
 Optional:
 
-- `allocation_type` (String) Allocation type. One of: Static, Unlimited. Defaults to Static.
+- `allocation_type` (String) Allocation type. One of: `Static`, `Unlimited`. Defaults to `Static`.
 - `size` (Number) Number of machines to allocate. Required for Static allocation, ignored for Unlimited.
 
 
@@ -119,7 +119,7 @@ Optional:
 
 Required:
 
-- `type` (String) Strategy type. One of: Unset, Rolling.
+- `type` (String) Strategy type. One of: `Unset`, `Rolling`.
 
 Optional:
 
@@ -131,7 +131,7 @@ Optional:
 
 Required:
 
-- `type` (String) Strategy type. One of: Unset, Rolling.
+- `type` (String) Strategy type. One of: `Unset`, `Rolling`.
 
 Optional:
 

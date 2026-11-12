@@ -34,6 +34,10 @@ func TestAccOmniMachineSetResource(t *testing.T) {
 					resource.TestCheckResourceAttr("omni_machine_set.default-workers", "role", "workers"),
 					resource.TestCheckResourceAttr("omni_machine_set.default-workers", "name", "workers"),
 					resource.TestCheckResourceAttr("omni_machine_set.default-workers", "id", name+"-workers"),
+					// The strategy names come from the generated enum, so the spelling a
+					// configuration uses has to survive the round trip through Omni untouched.
+					resource.TestCheckResourceAttr("omni_machine_set.default-workers", "update_strategy.type", "Rolling"),
+					resource.TestCheckResourceAttr("omni_machine_set.default-workers", "update_strategy.max_parallelism", "2"),
 					// A named machine set keeps the configured name and exposes the cluster-prefixed
 					// Omni resource ID separately.
 					resource.TestCheckResourceAttr("omni_machine_set.extra-workers", "name", "extra-workers"),
@@ -105,6 +109,11 @@ resource "omni_machine_set" "cp" {
 resource "omni_machine_set" "default-workers" {
   cluster = omni_cluster.test.name
   role    = "workers"
+
+  update_strategy = {
+    type            = "Rolling"
+    max_parallelism = 2
+  }
 }
 
 resource "omni_machine_set" "extra-workers" {
