@@ -1,13 +1,12 @@
-name: acceptance-tests-qemu
+name: acceptance-tests-proxmox
 
-# End-to-end test that provisions real QEMU machines, joins them to a throwaway Omni over SideroLink,
-# and exercises a cluster through bootstrap and scale up/down (see hack/test/run-qemu.sh and the
-# `qemu`-tagged test in internal/integration).
+# End-to-end test with real machines: a containerized Proxmox VE node runs the Talos VMs, which join a
+# throwaway Omni with a join config passed as cloud-init user data, and the test exercises a cluster
+# through bootstrap and scale up/down (see hack/test/run-proxmox.sh and the `proxmox`-tagged test in
+# internal/integration).
 #
-# This is heavy (boots several Talos VMs), so it runs nightly, on pull requests, and on demand. It
-# requires a runner with nested virtualization (KVM); the default GitHub-hosted runner is small, so
-# override the runner via the `QEMU_RUNNER` repository variable to target a host with more RAM/disk
-# (≈16GB RAM and ≈80GB disk for four VMs).
+# This is heavy (boots up to four Talos VMs), so it runs nightly, on pull requests, and on demand. It
+# requires a runner with KVM and room for the VMs (≈16GB RAM and ≈50GB disk).
 
 on:
   schedule:
@@ -24,7 +23,7 @@ env:
   OMNI_VERSION: ${{ github.event.inputs.omni_version || 'latest' }}
 
 jobs:
-  acceptance-qemu:
+  acceptance-proxmox:
     runs-on:
       group: large
     steps:
@@ -44,14 +43,14 @@ jobs:
           # cannot exec as a Terraform CLI.
           terraform_wrapper: false
 
-      - name: Run QEMU end-to-end test
+      - name: Run Proxmox end-to-end test
         # See the note in acceptance-tests.yaml: sudo resets PATH, so the path is resolved here.
-        run: sudo -E env TF_ACC_TERRAFORM_PATH="$(command -v terraform)" ./hack/test/run-qemu.sh
+        run: sudo -E env TF_ACC_TERRAFORM_PATH="$(command -v terraform)" ./hack/test/run-proxmox.sh
 
       - name: Upload Omni logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: omni-qemu-logs
-          path: /tmp/omni-tf-acc-qemu.log
+          name: omni-proxmox-logs
+          path: /tmp/omni-tf-acc-proxmox.log
           if-no-files-found: ignore

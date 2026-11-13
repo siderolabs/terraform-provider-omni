@@ -1,6 +1,146 @@
+# A cluster on Proxmox VMs, for TestAccOmniClusterWithMachines. Every step renders this with
+# different machine lists: VMs added to a list are created and joined to the cluster, VMs dropped
+# from one are taken out of the cluster and destroyed.
+#
+# The VMs are built the way examples/modules/omni-proxmox-cluster/modules/machine builds them, with
+# one set of named resources per machine: the test framework supports neither child modules nor
+# for_each.
+
+terraform {
+  required_providers {
+    omni = {
+      source = "siderolabs/omni"
+    }
+    proxmox = {
+      source  = "bpg/proxmox"
+      version = ">= 0.80.0"
+    }
+  }
+}
+
 provider "omni" {
   insecure_skip_tls_verify = true
 }
+
+# The password is read from PROXMOX_VE_PASSWORD.
+provider "proxmox" {
+  endpoint = "{{ .Proxmox.Endpoint }}"
+  username = "root@pam"
+  insecure = true
+
+  # Snippets, which carry the cloud-init user data, can only be uploaded over SSH.
+  ssh {
+    agent    = false
+    username = "root"
+
+    node {
+      name    = "{{ .Proxmox.Node }}"
+      address = "{{ .Proxmox.SSHAddress }}"
+      port    = {{ .Proxmox.SSHPort }}
+    }
+  }
+}
+{{ range .Machines }}
+# --- {{ . }} ---
+
+# The machine joins with a label unique to it, signed into its join token, which is how
+# omni_machine_wait finds its UUID. The test name is random, so the label is unique across runs.
+data "omni_machine_join_config" "{{ . }}" {
+  machine_labels = {
+    "terraform/cluster" = "{{ $.Name }}"
+    "terraform/machine" = "{{ $.Name }}-{{ . }}"
+  }
+}
+
+resource "proxmox_virtual_environment_file" "{{ . }}" {
+  content_type = "snippets"
+  datastore_id = "local"
+  node_name    = "{{ $.Proxmox.Node }}"
+
+  source_raw {
+    file_name = "omni-{{ $.Name }}-{{ . }}.yaml"
+    data      = data.omni_machine_join_config.{{ . }}.config
+  }
+}
+
+resource "proxmox_virtual_environment_vm" "{{ . }}" {
+  name            = "{{ $.Name }}-{{ . }}"
+  node_name       = "{{ $.Proxmox.Node }}"
+  stop_on_destroy = true
+
+  # The ISO carries the qemu-guest-agent extension, which waits for this channel.
+  agent {
+    enabled = true
+    timeout = "5m"
+  }
+
+  cpu {
+    cores = 2
+    type  = "x86-64-v2-AES"
+  }
+
+  memory {
+    dedicated = 3072
+  }
+
+  operating_system {
+    type = "l26"
+  }
+
+  scsi_hardware = "virtio-scsi-single"
+
+  # threads: CI runners disable io_uring, which QEMU would otherwise fail on.
+  disk {
+    datastore_id = "local"
+    interface    = "scsi0"
+    size         = 10
+    file_format  = "raw"
+    iothread     = true
+    aio          = "threads"
+  }
+
+  cdrom {
+    file_id   = "{{ $.Proxmox.TalosISO }}"
+    interface = "ide3"
+  }
+
+  boot_order = ["scsi0", "ide3"]
+
+  network_device {
+    bridge = "{{ $.Proxmox.Bridge }}"
+    model  = "virtio"
+  }
+
+  initialization {
+    datastore_id      = "local"
+    interface         = "ide2"
+    user_data_file_id = proxmox_virtual_environment_file.{{ . }}.id
+
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+  }
+}
+
+resource "omni_machine_wait" "{{ . }}" {
+  labels = {
+    "terraform/machine" = "{{ $.Name }}-{{ . }}"
+  }
+
+  triggers = {
+    vm_id = proxmox_virtual_environment_vm.{{ . }}.id
+  }
+
+  remove_on_destroy = true
+
+  timeouts = {
+    create = "15m"
+  }
+}
+{{ end }}
+# --- The cluster ---
 
 resource "omni_cluster" "test" {
   name               = "{{ .Name }}"
@@ -13,9 +153,9 @@ resource "omni_config_patch" "kubespan" {
   weight  = 200
   cluster = omni_cluster.test.name
   data = yamlencode({
-    apiVersion  = "v1alpha1"
-    kind        = "KubeSpanConfig"
-    enabled     = true
+    apiVersion = "v1alpha1"
+    kind       = "KubeSpanConfig"
+    enabled    = true
   })
 }
 
@@ -34,17 +174,32 @@ resource "omni_machine_set" "extra-workers" {
   cluster = omni_cluster.test.name
   role    = "workers"
 }
-{{ range $i, $id := .ControlPlanes }}
-resource "omni_machine_set_node" "cp{{ $i }}" {
-  machine_id  = "{{ $id }}"
+{{ range .ControlPlanes }}
+resource "omni_machine_set_node" "{{ . }}" {
+  machine_id  = omni_machine_wait.{{ . }}.machine_id
   machine_set = omni_machine_set.cp.id
   cluster     = omni_cluster.test.name
 }
 {{ end }}
-{{- range $i, $id := .Workers }}
-resource "omni_machine_set_node" "worker{{ $i }}" {
-  machine_id  = "{{ $id }}"
+{{- range .Workers }}
+resource "omni_machine_set_node" "{{ . }}" {
+  machine_id  = omni_machine_wait.{{ . }}.machine_id
   machine_set = omni_machine_set.extra-workers.id
   cluster     = omni_cluster.test.name
 }
 {{ end }}
+resource "omni_cluster_wait" "test" {
+  cluster = omni_cluster.test.name
+
+  # Exactly these machines: each step changes them, so each step waits for the cluster to settle
+  # again, and a scale down is only done once the removed machines are out.
+  machine_ids = [
+{{- range .Machines }}
+    omni_machine_set_node.{{ . }}.machine_id,
+{{- end }}
+  ]
+
+  timeouts = {
+    create = "{{ .ReadyTimeout }}"
+  }
+}

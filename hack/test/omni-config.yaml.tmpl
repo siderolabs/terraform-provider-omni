@@ -1,8 +1,8 @@
 # Omni server configuration for the integration test harness (envsubst template).
 #
-# run.sh / run-qemu.sh render this into hack/test/omni-config.yaml via `envsubst`, substituting
-# ${OMNI_SIDEROLINK_ADVERTISED_HOST} (127.0.0.1 for the machine-less suite, the host LAN/bridge IP
-# under QEMU). The rendered file is mounted into the Omni container and loaded with --config-path.
+# run.sh / run-proxmox.sh render this into hack/test/omni-config.yaml via `envsubst`, substituting
+# ${OMNI_SIDEROLINK_ADVERTISED_HOST} (127.0.0.1 for the machine-less suite, Omni's address on the
+# Proxmox network for the machine-backed one). The rendered file is mounted into the Omni container and loaded with --config-path.
 account:
   id: ac000000-0000-0000-0000-000000000000
   name: omni-test

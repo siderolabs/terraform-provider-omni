@@ -6,7 +6,7 @@ run:
   issues-exit-code: 1
   tests: true
   build-tags:
-    - qemu
+    - proxmox
 
 # output configuration options
 output:

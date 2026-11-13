@@ -4,6 +4,8 @@
 
 package omni
 
+import "time"
+
 // This file exports the internals the tests in the omni_test package exercise, so that those tests
 // sit alongside the acceptance tests and consume the provider the way a caller would.
 
@@ -38,4 +40,22 @@ var (
 	ParseJoinTokenExpiration   = parseJoinTokenExpiration
 	PlannedJoinTokenExpiration = plannedJoinTokenExpiration
 	ReconcileTimestamp         = reconcileTimestamp
+
+	CheckJoinTokenCarriesLabels  = checkJoinTokenCarriesLabels
+	ClusterNotReady              = clusterNotReady
+	FindMachine                  = findMachine
+	WaitForCluster               = waitForCluster
+	WaitForMachine               = waitForMachine
+	WaitForMachineToLeaveCluster = waitForMachineToLeaveCluster
+
+	ErrMachineAmbiguous = errMachineAmbiguous
 )
+
+// SetWaitIntervals sets how often the waits re-check Omni without an event, and reopen broken
+// watches, for a test, and restores them afterwards.
+func SetWaitIntervals(t interface{ Cleanup(func()) }, resync, rewatch time.Duration) {
+	previousResync, previousRewatch := waitResyncInterval, waitRewatchInterval
+	waitResyncInterval, waitRewatchInterval = resync, rewatch
+
+	t.Cleanup(func() { waitResyncInterval, waitRewatchInterval = previousResync, previousRewatch })
+}
