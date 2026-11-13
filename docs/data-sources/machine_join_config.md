@@ -53,6 +53,18 @@ data "omni_machine_join_config" "tunnelled" {
   use_grpc_tunnel = true
 }
 
+# Labels to put on every machine that joins with this config. They are signed into the join token,
+# and Omni copies them onto the machine when it registers. A label unique to one machine is how to
+# find that machine in Omni afterwards, see `omni_machine_wait`.
+data "omni_machine_join_config" "labelled" {
+  token_id = omni_join_token.fleet.id
+
+  machine_labels = {
+    "terraform/machine" = "worker-0"
+    "zone"              = "rack-a"
+  }
+}
+
 # --- Cloud: a stock Talos image plus the join config as user data ---------------------------------
 #
 # No Omni-specific installation media is needed here. The machine boots a stock Talos image, the
@@ -115,6 +127,7 @@ output "omni_endpoint" {
 
 ### Optional
 
+- `machine_labels` (Map of String) Labels to put on every machine that joins with this configuration. They are signed into the join token, so a machine cannot alter them, and Omni copies them onto the machine when it first registers. From then on they are ordinary user labels that can be edited or removed in Omni. A label unique to one machine is how to find that machine once it has joined, see `omni_machine_wait`. Keys under the `omni.sidero.dev/` prefix are reserved. The labels travel on the kernel command line, so the encoded token, labels included, is limited to 1024 bytes.
 - `token_id` (String, Sensitive) The join token to embed, i.e. the `id` of an `omni_join_token`. Mutually exclusive with `token_name`; with neither, the instance default is used, which `omni_default_join_token` sets.
 - `token_name` (String) Looks the join token up by its `name` instead of its value, which keeps the token out of the configuration. Use `initial` for the token Omni bootstrapped itself with, which has no name of its own.
 - `use_grpc_tunnel` (Boolean) Tunnel the SideroLink WireGuard traffic over gRPC instead of sending it as UDP. Needed where the machine cannot reach Omni's SideroLink UDP port, for instance behind a proxy or a firewall that passes only HTTPS. It costs throughput, so leave it off where plain UDP works.

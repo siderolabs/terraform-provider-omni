@@ -28,6 +28,12 @@ Early, but no longer a skeleton. Supported resources:
 | `omni_service_account` | Service accounts and their keys (`omnictl serviceaccount`) |
 | `omni_join_token` | Join tokens machines present to register (`omnictl jointoken`) |
 | `omni_default_join_token` | Which join token the instance treats as the default |
+| `omni_machine_wait` | Waits for a machine to join, finding its UUID by the labels its join config carried |
+| `omni_cluster_wait` | Waits for a cluster to become ready |
+
+[`examples/modules/omni-proxmox-cluster`](examples/modules/omni-proxmox-cluster) puts these together:
+Proxmox VMs boot a stock Talos ISO with the join config as cloud-init user data, are waited for and
+placed in a cluster, and the apply finishes once the cluster is ready.
 
 Plus the `omni_user`, `omni_service_account`, `omni_installation_media` and
 `omni_machine_join_config` data sources (`omni_installation_media` resolves a preset into a
