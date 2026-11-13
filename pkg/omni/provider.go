@@ -151,6 +151,8 @@ func (p *OmniProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewEtcdBackupS3ConfigResource,
 		NewInstallationMediaPresetResource,
 		NewServiceAccountResource,
+		NewJoinTokenResource,
+		NewDefaultJoinTokenResource,
 	}
 }
 
@@ -160,5 +162,6 @@ func (p *OmniProvider) DataSources(_ context.Context) []func() datasource.DataSo
 		NewUserDataSource,
 		NewServiceAccountDataSource,
 		NewInstallationMediaDataSource,
+		NewMachineJoinConfigDataSource,
 	}
 }

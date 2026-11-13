@@ -22,10 +22,20 @@ const (
 	InstallationMediaFormatPXE = installationMediaFormatPXE
 )
 
-// Installation media mapping, exported for tests.
+// Internals exported for tests.
 var (
 	MediaTargetFromPreset      = mediaTargetFromPreset
 	SchematicRequestFromPreset = schematicRequestFromPreset
 	FilenameFromMediaURL       = filenameFromMediaURL
 	ValidDiskImageFormat       = validDiskImageFormat
+
+	DescribeOneOf              = describeOneOf
+	EnumDisplayName            = enumDisplayName
+	EnumName                   = enumName
+	EnumNames                  = enumNames
+	JoinEndpoint               = joinEndpoint
+	JoinURL                    = joinURL
+	ParseJoinTokenExpiration   = parseJoinTokenExpiration
+	PlannedJoinTokenExpiration = plannedJoinTokenExpiration
+	ReconcileTimestamp         = reconcileTimestamp
 )
