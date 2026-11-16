@@ -2,11 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build qemu
+//go:build proxmox
 
 // This file holds the end-to-end test that requires real machines and is therefore guarded by the
-// `qemu` build tag. It is compiled and run only by the QEMU harness (hack/test/run-qemu.sh, via
-// `go test -tags qemu`), keeping the machine-less acceptance suite unaffected.
+// `proxmox` build tag. It is compiled and run only by the Proxmox harness (hack/test/run-proxmox.sh,
+// via `go test -tags proxmox`), keeping the machine-less acceptance suite unaffected.
 
 package integration_test
 
@@ -15,6 +15,9 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 	"text/template"
 	"time"
@@ -23,6 +26,7 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
 	cosistate "github.com/cosi-project/runtime/pkg/state"
+	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	tfresource "github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -36,18 +40,23 @@ import (
 // take to settle. Talos installs, etcd membership changes and Kubernetes bring-up are slow.
 const clusterReadyTimeout = 20 * time.Minute
 
+// machineLabelKey is the label each VM's machine is identified by in Omni.
+const machineLabelKey = "terraform/machine"
+
 //go:embed testdata/cluster_with_machines.tf.tmpl
 var clusterWithMachinesTemplateSource string
 
-// clusterWithMachinesTemplate renders a cluster with a control plane and worker machine set and one
-// machine_set_node per allocated machine.
+// clusterWithMachinesTemplate renders the Proxmox VMs, a cluster with a control plane and worker
+// machine set, one machine_set_node per VM, and the wait for the cluster to settle.
 var clusterWithMachinesTemplate = template.Must(template.New("cluster").Parse(clusterWithMachinesTemplateSource))
 
 // TestAccOmniClusterWithMachines is the end-to-end test that exercises a cluster backed by real
-// machines. It requires four machines to have already joined the target Omni instance (provisioned
-// as QEMU VMs by hack/test/run-qemu.sh).
+// machines. It creates them as Proxmox VMs the way examples/modules/omni-proxmox-cluster does, which
+// is also what it tests: each VM joins Omni with a label signed into its join token,
+// omni_machine_wait resolves the machine's UUID from that label, and omni_cluster_wait waits for the
+// cluster after every change.
 //
-// It walks the cluster through scale transitions, waiting for it to settle after each:
+// It walks the cluster through scale transitions, creating and destroying VMs along the way:
 //  1. bootstrap with a single control plane,
 //  2. scale up to three control planes and one worker,
 //  3. scale back down to a single control plane (keeping the worker),
@@ -56,15 +65,19 @@ var clusterWithMachinesTemplate = template.Must(template.New("cluster").Parse(cl
 func TestAccOmniClusterWithMachines(t *testing.T) {
 	talosVersion, kubernetesVersion := discoverVersions(t)
 
-	// Three control plane machines plus one worker are required to exercise the full scale up/down.
-	machines := availableMachineIDs(t, 4)
-	controlPlanes, worker := machines[:3], machines[3:4]
+	controlPlanes := []string{"cp-0", "cp-1", "cp-2"}
+	worker := []string{"worker-0"}
 
-	name := acctest.RandomWithPrefix("tf-acc-qemu")
+	name := acctest.RandomWithPrefix("tf-acc-pve")
 
 	step := func(cps, workers []string) tfresource.TestStep {
 		return tfresource.TestStep{
-			Config: renderClusterWithMachinesConfig(t, name, talosVersion, kubernetesVersion, cps, workers),
+			// A configuration file rather than an inline one: the test framework only runs
+			// `terraform init` on the step's own configuration when it comes from a file, and that
+			// is what installs the Proxmox provider. The file configures its providers, so the
+			// provider under test has to be given per step as well.
+			ProtoV6ProviderFactories: omni.TestAccProtoV6ProviderFactories,
+			ConfigFile:               config.StaticFile(renderClusterWithMachinesConfig(t, name, talosVersion, kubernetesVersion, cps, workers)),
 			Check: tfresource.ComposeAggregateTestCheckFunc(
 				tfresource.TestCheckResourceAttr("omni_cluster.test", "name", name),
 				// A named machine set keeps the configured name and exposes the cluster-prefixed Omni
@@ -74,14 +87,21 @@ func TestAccOmniClusterWithMachines(t *testing.T) {
 				tfresource.TestCheckResourceAttr("omni_machine_set.workers", "name", "workers"),
 				tfresource.TestCheckResourceAttr("omni_machine_set.workers", "id", name+"-workers"),
 				tfresource.TestCheckResourceAttr("omni_machine_set.cp", "id", name+"-control-planes"),
-				testAccCheckClusterRunning(t.Context(), name, len(cps)+len(workers), clusterReadyTimeout),
+				// The apply only finishes once omni_cluster_wait has seen the cluster settle.
+				tfresource.TestCheckResourceAttr("omni_cluster_wait.test", "ready", "true"),
+				tfresource.TestCheckResourceAttr("omni_cluster_wait.test", "phase", "Running"),
+				tfresource.TestCheckResourceAttr("omni_cluster_wait.test", "machines_total", fmt.Sprint(len(cps)+len(workers))),
+				tfresource.TestCheckResourceAttr("omni_cluster_wait.test", "machines_healthy", fmt.Sprint(len(cps)+len(workers))),
+				// Cross-check both waits against Omni directly: the cluster has settled with exactly
+				// the expected machines, and each machine is the one its VM's label points at.
+				testAccCheckClusterRunning(t.Context(), name, len(cps)+len(workers), 2*time.Minute),
+				testAccCheckMachinesMatchLabels(t.Context()),
 			),
 		}
 	}
 
 	tfresource.UnitTest(t, tfresource.TestCase{
-		ProtoV6ProviderFactories: omni.TestAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckClusterDestroy,
+		CheckDestroy: testAccCheckClusterDestroy,
 		Steps: []tfresource.TestStep{
 			step(controlPlanes[:1], nil),    // bootstrap with a single control plane
 			step(controlPlanes, worker),     // scale up to three control planes and one worker
@@ -90,72 +110,81 @@ func TestAccOmniClusterWithMachines(t *testing.T) {
 	})
 }
 
+// renderClusterWithMachinesConfig renders a step's configuration to a file and returns its path.
 func renderClusterWithMachinesConfig(t *testing.T, name, talosVersion, kubernetesVersion string, controlPlanes, workers []string) string {
 	t.Helper()
 
 	var buf bytes.Buffer
 
 	if err := clusterWithMachinesTemplate.Execute(&buf, struct {
+		Proxmox           proxmoxConfig
 		Name              string
 		TalosVersion      string
 		KubernetesVersion string
+		ReadyTimeout      string
 		ControlPlanes     []string
 		Workers           []string
+		Machines          []string
 	}{
+		Proxmox:           proxmox,
 		Name:              name,
 		TalosVersion:      talosVersion,
 		KubernetesVersion: kubernetesVersion,
+		ReadyTimeout:      clusterReadyTimeout.String(),
 		ControlPlanes:     controlPlanes,
 		Workers:           workers,
+		Machines:          slices.Concat(controlPlanes, workers),
 	}); err != nil {
-		t.Fatalf("failed to render cluster config: %v", err)
+		t.Fatalf("failed to render the cluster configuration: %v", err)
 	}
 
-	return buf.String()
+	path := filepath.Join(t.TempDir(), "main.tf")
+
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+		t.Fatalf("failed to write the cluster configuration: %v", err)
+	}
+
+	return path
 }
 
-// availableMachineIDs polls the target Omni until at least count machines are connected and
-// available for allocation, returning their UUIDs. It fails the test if the machines do not appear
-// within the deadline.
-func availableMachineIDs(t *testing.T, count int) []string {
-	t.Helper()
-
-	client, err := newTestClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close() //nolint:errcheck
-
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
-	defer cancel()
-
-	for {
-		machines, err := safe.ReaderListAll[*omnires.MachineStatus](
-			ctx,
-			client.Omni().State(),
-			cosistate.WithLabelQuery(
-				resource.LabelExists(omnires.MachineStatusLabelAvailable),
-				resource.LabelExists(omnires.MachineStatusLabelConnected),
-			),
-		)
+// testAccCheckMachinesMatchLabels checks that the machine each VM was resolved to is the machine
+// that joined with that VM's label, i.e. that omni_machine_wait found the right machine. The label
+// is read back from Omni, where it got from the join token.
+func testAccCheckMachinesMatchLabels(ctx context.Context) tfresource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		client, err := newTestClient()
 		if err != nil {
-			t.Fatalf("failed to list available machines: %v", err)
+			return err
+		}
+		defer client.Close() //nolint:errcheck
+
+		var checked int
+
+		for key, rs := range s.RootModule().Resources {
+			if rs.Type != "omni_machine_wait" {
+				continue
+			}
+
+			machineID := rs.Primary.Attributes["machine_id"]
+			want := rs.Primary.Attributes["labels."+machineLabelKey]
+
+			status, err := safe.ReaderGetByID[*omnires.MachineStatus](ctx, client.Omni().State(), machineID)
+			if err != nil {
+				return fmt.Errorf("machine %q of %s: %w", machineID, key, err)
+			}
+
+			if got, _ := status.Metadata().Labels().Get(machineLabelKey); got != want {
+				return fmt.Errorf("machine %q of %s has %s=%q, want %q", machineID, key, machineLabelKey, got, want)
+			}
+
+			checked++
 		}
 
-		ids := make([]string, 0, machines.Len())
-		for machine := range machines.All() {
-			ids = append(ids, machine.Metadata().ID())
+		if checked == 0 {
+			return fmt.Errorf("no omni_machine_wait resources in the state")
 		}
 
-		if len(ids) >= count {
-			return ids[:count]
-		}
-
-		select {
-		case <-ctx.Done():
-			t.Fatalf("only %d of %d required machines became available before the deadline", len(ids), count)
-		case <-time.After(10 * time.Second):
-		}
+		return nil
 	}
 }
 

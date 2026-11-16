@@ -28,6 +28,12 @@ testacc:
 test-integration:
 	./hack/test/run.sh
 
+# Brings up Omni and a containerized Proxmox VE node, and runs the end-to-end test that creates a
+# cluster from Proxmox VMs. Needs KVM.
+.PHONY: test-proxmox
+test-proxmox:
+	./hack/test/run-proxmox.sh
+
 .PHONY: vet
 vet:
 	go vet ./...

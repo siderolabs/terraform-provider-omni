@@ -8,17 +8,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/cosi-project/runtime/pkg/safe"
 	cosistate "github.com/cosi-project/runtime/pkg/state"
 	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/siderolabs/omni/client/pkg/client/management"
+	"github.com/siderolabs/omni/client/pkg/jointoken"
 	"github.com/siderolabs/omni/client/pkg/omni/resources/siderolink"
 )
 
@@ -32,6 +36,7 @@ var (
 // machineJoinConfigDataSourceModel maps the omni_machine_join_config data source schema.
 type machineJoinConfigDataSourceModel struct {
 	KernelArgs    types.List   `tfsdk:"kernel_args"`
+	MachineLabels types.Map    `tfsdk:"machine_labels"`
 	TokenID       types.String `tfsdk:"token_id"`
 	TokenName     types.String `tfsdk:"token_name"`
 	JoinToken     types.String `tfsdk:"join_token"`
@@ -93,6 +98,19 @@ func (d *machineJoinConfigDataSource) Schema(_ context.Context, _ datasource.Sch
 				Description: "Tunnel the SideroLink WireGuard traffic over gRPC instead of sending it as UDP. Needed " +
 					"where the machine cannot reach Omni's SideroLink UDP port, for instance behind a proxy or a " +
 					"firewall that passes only HTTPS. It costs throughput, so leave it off where plain UDP works.",
+			},
+			"machine_labels": schema.MapAttribute{
+				Optional:    true,
+				ElementType: types.StringType,
+				Description: "Labels to put on every machine that joins with this configuration. They are signed into " +
+					"the join token, so a machine cannot alter them, and Omni copies them onto the machine when it first " +
+					"registers. From then on they are ordinary user labels that can be edited or removed in Omni. " +
+					"A label unique to one machine is how to find that machine once it has joined, see " +
+					"`omni_machine_wait`. Keys under the `omni.sidero.dev/` prefix are reserved. The labels travel on the " +
+					"kernel command line, so the encoded token, labels included, is limited to 1024 bytes.",
+				Validators: []validator.Map{
+					mapvalidator.KeysAre(stringvalidator.LengthAtLeast(1)),
+				},
 			},
 			"join_token": schema.StringAttribute{
 				Computed:  true,
@@ -181,11 +199,43 @@ func (d *machineJoinConfigDataSource) Read(ctx context.Context, req datasource.R
 		return
 	}
 
-	joinConfig, err := d.data.client.Management().GetMachineJoinConfig(ctx, token, config.UseGRPCTunnel.ValueBool())
+	var opts []management.MachineJoinConfigOption
+
+	if !config.MachineLabels.IsNull() && !config.MachineLabels.IsUnknown() {
+		labels := map[string]string{}
+
+		resp.Diagnostics.Append(config.MachineLabels.ElementsAs(ctx, &labels, false)...)
+
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		// Checking here turns what Omni would refuse into an error on the attribute itself.
+		if err = jointoken.ValidateLabels(labels); err != nil {
+			resp.Diagnostics.AddAttributeError(path.Root("machine_labels"), "Invalid machine labels", err.Error())
+
+			return
+		}
+
+		opts = append(opts, management.WithMachineLabels(labels))
+	}
+
+	joinConfig, err := d.data.client.Management().GetMachineJoinConfig(ctx, token, config.UseGRPCTunnel.ValueBool(), opts...)
 	if err != nil {
 		errToDiag(&resp.Diagnostics, "Failed to get the Omni machine join configuration", err)
 
 		return
+	}
+
+	// Omni releases without label support ignore the field they do not know and hand back a token
+	// without the labels, so the machines would join unlabelled, and anything waiting on a label
+	// would wait for nothing. Catch that here instead.
+	if len(opts) > 0 {
+		if err = checkJoinTokenCarriesLabels(joinConfig.GetKernelArgs()); err != nil {
+			resp.Diagnostics.AddAttributeError(path.Root("machine_labels"), "Machine labels are not supported by this Omni instance", err.Error())
+
+			return
+		}
 	}
 
 	apiConfig, err := safe.ReaderGetByID[*siderolink.APIConfig](ctx, d.data.state, siderolink.ConfigID)
@@ -240,4 +290,34 @@ func joinURL(baseURL, token string) string {
 	}
 
 	return baseURL + separator + "jointoken=" + token
+}
+
+// checkJoinTokenCarriesLabels verifies that the join token in the kernel arguments Omni returned is
+// one that can carry labels.
+func checkJoinTokenCarriesLabels(kernelArgs []string) error {
+	for _, arg := range kernelArgs {
+		value, ok := strings.CutPrefix(arg, "siderolink.api=")
+		if !ok {
+			continue
+		}
+
+		apiURL, err := url.Parse(value)
+		if err != nil {
+			return fmt.Errorf("failed to parse the SideroLink API URL Omni returned: %w", err)
+		}
+
+		token, err := jointoken.Parse(apiURL.Query().Get("jointoken"))
+		if err != nil {
+			return fmt.Errorf("failed to parse the join token Omni returned: %w", err)
+		}
+
+		if token.Version != jointoken.Version3 {
+			return errors.New("the join token Omni returned does not carry the labels, which means this Omni predates " +
+				"machine labels in join tokens: upgrade it to v1.13 or later, or leave machine_labels unset")
+		}
+
+		return nil
+	}
+
+	return errors.New("the kernel arguments Omni returned have no SideroLink API URL to check the join token in")
 }

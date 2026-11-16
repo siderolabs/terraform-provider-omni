@@ -63,7 +63,7 @@ services:
       - /dev/net/tun
     volumes:
       - ./certs:/certs:ro
-      # Rendered from omni-config.yaml.tmpl by run.sh / run-qemu.sh (see that file for details).
+      # Rendered from omni-config.yaml.tmpl by run.sh / run-proxmox.sh (see that file for details).
       - ./omni-config.yaml:/etc/omni/config.yaml:ro
       - omni-out:/_out
     ports:
@@ -89,3 +89,7 @@ volumes:
 networks:
   omni-test:
     driver: bridge
+    # Lowered only where the host's own uplink is smaller, e.g. a VPN, which large packets from the
+    # containers would otherwise not get through.
+    driver_opts:
+      com.docker.network.driver.mtu: "${OMNI_TEST_NETWORK_MTU:-1500}"

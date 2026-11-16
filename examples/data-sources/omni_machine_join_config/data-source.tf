@@ -29,6 +29,18 @@ data "omni_machine_join_config" "tunnelled" {
   use_grpc_tunnel = true
 }
 
+# Labels to put on every machine that joins with this config. They are signed into the join token,
+# and Omni copies them onto the machine when it registers. A label unique to one machine is how to
+# find that machine in Omni afterwards, see `omni_machine_wait`.
+data "omni_machine_join_config" "labelled" {
+  token_id = omni_join_token.fleet.id
+
+  machine_labels = {
+    "terraform/machine" = "worker-0"
+    "zone"              = "rack-a"
+  }
+}
+
 # --- Cloud: a stock Talos image plus the join config as user data ---------------------------------
 #
 # No Omni-specific installation media is needed here. The machine boots a stock Talos image, the

@@ -1,0 +1,53 @@
+# Proxmox overlay for the integration test harness, layered on docker-compose.yaml by run-proxmox.sh.
+#
+# Adds a single containerized Proxmox VE node and a network the nested VMs live on. Omni is attached
+# to that network too, at a fixed address, so a VM reaches Omni's machine API and SideroLink directly
+# rather than through ports published on the host: nothing depends on which host ports are free, and
+# the advertised addresses are the same everywhere.
+
+x-pve: &pve
+  image: ghcr.io/longqt-sea/proxmox-ve:${PROXMOX_VE_IMAGE_TAG:-2.5.0}
+  restart: unless-stopped
+  stdin_open: true
+  tty: true
+  cgroup: private
+  device_cgroup_rules:
+    - "a *:* rwm"
+  cap_add:
+    - ALL
+  security_opt:
+    - seccomp=unconfined
+    - apparmor=unconfined
+    - systempaths=unconfined
+  volumes:
+    - /usr/lib/modules:/usr/lib/modules:ro
+    - /sys/kernel/security:/sys/kernel/security
+  environment:
+    PASSWORD: ${PROXMOX_VE_PASSWORD:-testonly}
+
+services:
+  pve-1:
+    <<: *pve
+    # The hostname is the Proxmox node name.
+    hostname: pve-1
+    networks:
+      proxmox:
+        ipv4_address: ${PROXMOX_SUBNET_PREFIX:-10.0.99}.1
+
+  omni:
+    networks:
+      omni-test: {}
+      proxmox:
+        ipv4_address: ${PROXMOX_SUBNET_PREFIX:-10.0.99}.98
+
+networks:
+  proxmox:
+    # Match the CI runner's eth0 MTU (1450) so packets from the nested VMs egress the host without
+    # being dropped. Talos's WireGuard sets DF, so a 1500-byte packet would die silently on the way.
+    # run-proxmox.sh hands the same MTU to the VMs.
+    driver_opts:
+      com.docker.network.driver.mtu: "${PROXMOX_NETWORK_MTU:-1450}"
+    ipam:
+      config:
+        - subnet: ${PROXMOX_SUBNET_PREFIX:-10.0.99}.0/24
+          gateway: ${PROXMOX_SUBNET_PREFIX:-10.0.99}.99

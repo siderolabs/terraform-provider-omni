@@ -153,6 +153,8 @@ func (p *OmniProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewServiceAccountResource,
 		NewJoinTokenResource,
 		NewDefaultJoinTokenResource,
+		NewMachineWaitResource,
+		NewClusterWaitResource,
 	}
 }
 
