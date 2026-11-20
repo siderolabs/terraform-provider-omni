@@ -154,6 +154,8 @@ func (p *OmniProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewJoinTokenResource,
 		NewDefaultJoinTokenResource,
 		NewMachineWaitResource,
+		NewMachineGRPCTunnelResource,
+		NewMachineLabelsResource,
 		NewClusterWaitResource,
 	}
 }

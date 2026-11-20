@@ -43,6 +43,9 @@ const clusterReadyTimeout = 20 * time.Minute
 // machineLabelKey is the label each VM's machine is identified by in Omni.
 const machineLabelKey = "terraform/machine"
 
+// machineRoleLabelKey is the label omni_machine_labels sets on every machine of the cluster.
+const machineRoleLabelKey = "terraform/role"
+
 //go:embed testdata/cluster_with_machines.tf.tmpl
 var clusterWithMachinesTemplateSource string
 
@@ -96,6 +99,7 @@ func TestAccOmniClusterWithMachines(t *testing.T) {
 				// the expected machines, and each machine is the one its VM's label points at.
 				testAccCheckClusterRunning(t.Context(), name, len(cps)+len(workers), 2*time.Minute),
 				testAccCheckMachinesMatchLabels(t.Context()),
+				testAccCheckMachineRoleLabels(t.Context()),
 			),
 		}
 	}
@@ -182,6 +186,50 @@ func testAccCheckMachinesMatchLabels(ctx context.Context) tfresource.TestCheckFu
 
 		if checked == 0 {
 			return fmt.Errorf("no omni_machine_wait resources in the state")
+		}
+
+		return nil
+	}
+}
+
+// testAccCheckMachineRoleLabels checks that omni_machine_labels put each machine's role label next
+// to the label the machine joined with, rather than replacing it.
+func testAccCheckMachineRoleLabels(ctx context.Context) tfresource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		client, err := newTestClient()
+		if err != nil {
+			return err
+		}
+		defer client.Close() //nolint:errcheck
+
+		var checked int
+
+		for key, rs := range s.RootModule().Resources {
+			if rs.Type != "omni_machine_labels" {
+				continue
+			}
+
+			machineID := rs.Primary.Attributes["machine_id"]
+			wantRole := rs.Primary.Attributes["labels."+machineRoleLabelKey]
+
+			machineLabels, err := safe.ReaderGetByID[*omnires.MachineLabels](ctx, client.Omni().State(), machineID)
+			if err != nil {
+				return fmt.Errorf("labels of machine %q of %s: %w", machineID, key, err)
+			}
+
+			if got, _ := machineLabels.Metadata().Labels().Get(machineRoleLabelKey); got != wantRole {
+				return fmt.Errorf("machine %q of %s has %s=%q, want %q", machineID, key, machineRoleLabelKey, got, wantRole)
+			}
+
+			if _, ok := machineLabels.Metadata().Labels().Get(machineLabelKey); !ok {
+				return fmt.Errorf("machine %q of %s lost the %s label it joined with", machineID, key, machineLabelKey)
+			}
+
+			checked++
+		}
+
+		if checked == 0 {
+			return fmt.Errorf("no omni_machine_labels resources in the state")
 		}
 
 		return nil
