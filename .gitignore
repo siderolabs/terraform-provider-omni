@@ -36,3 +36,7 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Built provider binary and the Omni config the test harness generates
+/terraform-provider-omni
+/hack/test/omni-config.yaml

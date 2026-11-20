@@ -180,12 +180,29 @@ resource "omni_machine_set_node" "{{ . }}" {
   machine_set = omni_machine_set.cp.id
   cluster     = omni_cluster.test.name
 }
+
+# Next to the labels the machine joined with, which stay.
+resource "omni_machine_labels" "{{ . }}" {
+  machine_id = omni_machine_wait.{{ . }}.machine_id
+
+  labels = {
+    "terraform/role" = "controlplane"
+  }
+}
 {{ end }}
 {{- range .Workers }}
 resource "omni_machine_set_node" "{{ . }}" {
   machine_id  = omni_machine_wait.{{ . }}.machine_id
   machine_set = omni_machine_set.extra-workers.id
   cluster     = omni_cluster.test.name
+}
+
+resource "omni_machine_labels" "{{ . }}" {
+  machine_id = omni_machine_wait.{{ . }}.machine_id
+
+  labels = {
+    "terraform/role" = "worker"
+  }
 }
 {{ end }}
 resource "omni_cluster_wait" "test" {
