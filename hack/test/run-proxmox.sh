@@ -78,6 +78,10 @@ export OMNI_SIDEROLINK_ADVERTISED_HOST="${PROXMOX_SUBNET_PREFIX}.98"
 cleanup() {
   "${COMPOSE[@]}" logs --no-color > /tmp/omni-tf-acc-proxmox.log 2>&1 || true
 
+  if [[ -n "${TEST_HOME:-}" ]]; then
+    rm -rf "${TEST_HOME}"
+  fi
+
   if [[ "${KEEP_ENVIRONMENT:-false}" == "true" ]]; then
     echo "==> KEEP_ENVIRONMENT is set, leaving Omni at ${OMNI_ENDPOINT:-?} and Proxmox at https://${PVE_IP}:8006 running"
 
@@ -225,5 +229,18 @@ export PROXMOX_SSH_PORT=22
 export PROXMOX_BRIDGE=vmbr2
 export PROXMOX_TALOS_ISO="local:iso/${ISO_NAME}"
 
+# The Proxmox provider trusts a node's SSH host key on first use, recording it in ~/.ssh/known_hosts,
+# and every run brings up a new node with new keys at the same address: run the test with a home of
+# its own, so that it neither trips over a key from an earlier run nor writes to the user's. The Go
+# caches stay where they are.
+TEST_HOME="$(mktemp -d)"
+install -d -m 700 "${TEST_HOME}/.ssh"
+touch "${TEST_HOME}/.ssh/known_hosts"
+
+GOCACHE="$(go env GOCACHE)"
+GOMODCACHE="$(go env GOMODCACHE)"
+GOPATH="$(go env GOPATH)"
+export GOCACHE GOMODCACHE GOPATH
+
 echo "==> Running the machine-backed acceptance test against ${OMNI_ENDPOINT} and ${PROXMOX_VE_ENDPOINT}"
-go test -tags proxmox ./internal/integration/... -run TestAccOmniClusterWithMachines -v -count=1 -timeout 90m "$@"
+HOME="${TEST_HOME}" go test -tags proxmox ./internal/integration/... -run TestAccOmniClusterWithMachines -v -count=1 -timeout 90m "$@"

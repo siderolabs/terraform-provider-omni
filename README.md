@@ -30,6 +30,8 @@ Early, but no longer a skeleton. Supported resources:
 | `omni_default_join_token` | Which join token the instance treats as the default |
 | `omni_machine_wait` | Waits for a machine to join, finding its UUID by the labels its join config carried |
 | `omni_cluster_wait` | Waits for a cluster to become ready |
+| `omni_machine_labels` | User labels on a machine, managing only the keys it sets |
+| `omni_machine_grpc_tunnel` | Whether a machine tunnels SideroLink through gRPC (`omnictl configure machine --siderolink-connection`) |
 
 [`examples/modules/omni-proxmox-cluster`](examples/modules/omni-proxmox-cluster) puts these together:
 Proxmox VMs boot a stock Talos ISO with the join config as cloud-init user data, are waited for and
