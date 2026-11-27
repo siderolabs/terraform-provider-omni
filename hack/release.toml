@@ -5,41 +5,37 @@ project_name = "Omni Terraform Provider"
 github_repo = "siderolabs/terraform-provider-omni"
 ignore_deps = ["google.golang.org/grpc"]
 
-pre_release = true
-previous = "v0.1.0-alpha.3"
+pre_release = false
+previous = "v0.1.0-beta.0"
 
-[notes.etcd-backup-s3-config]
-title = "etcd Backup S3 Configuration"
+[notes.installation-media]
+title = "Installation Media URLs"
 description = """\
-The new `omni_etcd_backup_s3_config` resource manages the instance-wide S3 target for etcd backups, complementing the per-cluster `backup_interval` on `omni_cluster`.
+The new `omni_installation_media` data source resolves an `omni_installation_media_preset` into a downloadable URL, so the media can be passed to a hypervisor, a PXE server or a plain fetch.
 """
 
-[notes.installation-media-presets]
-title = "Installation Media Presets"
+[notes.join-tokens]
+title = "Join Tokens"
 description = """\
-The new `omni_installation_media_preset` resource manages installation media presets from Terraform.
+The new `omni_join_token` and `omni_default_join_token` resources manage join tokens and the instance default token.
+The new `omni_machine_join_config` data source returns the partial Talos machine configuration and kernel arguments a machine needs to join Omni from a stock Talos image.
 """
 
-[notes.machine-class]
-title = "Machine Classes"
+[notes.wait-resources]
+title = "Machine and Cluster Wait"
 description = """\
-The new `omni_machine_class` resource manages machine classes that either match existing machines by labels or auto-provision them through an infrastructure provider.
+The new `omni_machine_wait` resource waits for a machine to register with Omni and records its UUID, selecting it by labels or by machine ID.
+The new `omni_cluster_wait` resource waits for a cluster to become ready, including the configured Talos and Kubernetes versions after an upgrade.
 """
 
-[notes.service-accounts]
-title = "Service Accounts"
+[notes.machine-labels]
+title = "Machine Labels"
 description = """\
-The new `omni_service_account` resource and data source manage Omni service accounts from Terraform.
+The new `omni_machine_labels` resource sets user labels on a machine. It manages only the keys it is given, so labels set by Omni or in the UI are left untouched.
 """
 
-[notes.infra-provider]
-title = "Infrastructure Providers"
+[notes.machine-grpc-tunnel]
+title = "Machine gRPC Tunnel"
 description = """\
-The new `omni_infra_provider` resource registers an infrastructure provider in Omni together with its service account and exposes the generated key for the provider to authenticate with.
-"""
-
-[notes.machine-install-disk]
-title = "Machine Install Disk"
-description = """\
-The new `omni_machine_install_disk` resource sets a machine's Talos install disk, either by device path or by a CEL disk selector expression.
+The new `omni_machine_grpc_tunnel` resource sets whether a machine tunnels its SideroLink traffic through gRPC, like `omnictl configure machine --siderolink-connection`.
 """

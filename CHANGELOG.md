@@ -1,3 +1,66 @@
+## [Omni Terraform Provider 0.1.0](https://github.com/siderolabs/terraform-provider-omni/releases/tag/v0.1.0) (2026-11-27)
+
+Welcome to the v0.1.0 release of Omni Terraform Provider!
+
+
+
+Please try out the release binaries and report any issues at
+https://github.com/siderolabs/terraform-provider-omni/issues.
+
+### Installation Media URLs
+
+The new `omni_installation_media` data source resolves an `omni_installation_media_preset` into a downloadable URL, so the media can be passed to a hypervisor, a PXE server or a plain fetch.
+
+
+### Join Tokens
+
+The new `omni_join_token` and `omni_default_join_token` resources manage join tokens and the instance default token.
+The new `omni_machine_join_config` data source returns the partial Talos machine configuration and kernel arguments a machine needs to join Omni from a stock Talos image.
+
+
+### Machine gRPC Tunnel
+
+The new `omni_machine_grpc_tunnel` resource sets whether a machine tunnels its SideroLink traffic through gRPC, like `omnictl configure machine --siderolink-connection`.
+
+
+### Machine Labels
+
+The new `omni_machine_labels` resource sets user labels on a machine. It manages only the keys it is given, so labels set by Omni or in the UI are left untouched.
+
+
+### Machine and Cluster Wait
+
+The new `omni_machine_wait` resource waits for a machine to register with Omni and records its UUID, selecting it by labels or by machine ID.
+The new `omni_cluster_wait` resource waits for a cluster to become ready, including the configured Talos and Kubernetes versions after an upgrade.
+
+
+### Contributors
+
+* Artem Chernyshev
+
+### Changes
+<details><summary>5 commits</summary>
+<p>
+
+* [`bb4da28`](https://github.com/siderolabs/terraform-provider-omni/commit/bb4da2890c9c3ee1872caf9b4830f1023900c440) release(v0.1.0): prepare release
+* [`75f1413`](https://github.com/siderolabs/terraform-provider-omni/commit/75f141302a654c185dc752ddfe0b9aad91a06006) feat: support machine labels and gRPC tunnel mode resources (#27)
+* [`a8b3e16`](https://github.com/siderolabs/terraform-provider-omni/commit/a8b3e16a87a56dd52cd209cf8bda58c5cc0b7897) feat: support machine and cluster wait operations (#26)
+* [`cd5ebce`](https://github.com/siderolabs/terraform-provider-omni/commit/cd5ebce352e3b71de6c5da8d75b9f883dbfad9f1) feat: support join token management (#25)
+* [`e173a0d`](https://github.com/siderolabs/terraform-provider-omni/commit/e173a0d450b23b92ff02a4b8e76121efb50ad6e0) feat: support reading installation media URLs from Omni
+</p>
+</details>
+
+### Dependency Changes
+
+* **github.com/cosi-project/runtime**                           v1.16.3 -> v1.17.1
+* **github.com/hashicorp/terraform-plugin-framework-timeouts**  v0.7.0 **_new_**
+* **github.com/hashicorp/terraform-plugin-log**                 v0.11.0 **_new_**
+* **github.com/siderolabs/gen**                                 v0.8.7 -> v0.8.8
+* **github.com/siderolabs/go-api-signature**                    v0.3.13 -> v0.4.0
+* **github.com/siderolabs/omni/client**                         v1.12.2 -> v1.13.3
+
+Previous release can be found at [v0.1.0-beta.0](https://github.com/siderolabs/terraform-provider-omni/releases/tag/v0.1.0-beta.0)
+
 ## [Omni Terraform Provider 0.1.0-beta.0](https://github.com/siderolabs/terraform-provider-omni/releases/tag/v0.1.0-beta.0) (2026-09-28)
 
 Welcome to the v0.1.0-beta.0 release of Omni Terraform Provider!  
